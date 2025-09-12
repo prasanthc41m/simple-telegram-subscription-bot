@@ -5,5 +5,9 @@
 2. Linkgen Telegram bot to generate one time link for 24hrs
 
 ## Install bot in mobile termux
-```git clone https://github.com/prasanthc41m/simple-telegram-subscription-bo``` <br>
-```bash run.sh ```
+```
+git clone https://github.com/prasanthc41m/simple-telegram-subscription-bot
+cd simple-telegram-subscription-bot
+bash run.sh
+
+```

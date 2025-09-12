@@ -1,4 +1,4 @@
-# Telegram bots for Subscription based service 
+# Simple Telegram bots for Subscription based service 
 ### This can run from android mobile with termux. (No hosting pains)
 
 1. Main Telegram bot to remove users after 30 days

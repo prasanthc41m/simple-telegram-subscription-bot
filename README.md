@@ -8,6 +8,10 @@
 ```
 git clone https://github.com/prasanthc41m/simple-telegram-subscription-bot
 cd simple-telegram-subscription-bot
+```
+Make copy of config.py and change tokens and ids then run
+
+```
 bash run.sh
 
 ```

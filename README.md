@@ -9,7 +9,7 @@
 git clone https://github.com/prasanthc41m/simple-telegram-subscription-bot
 cd simple-telegram-subscription-bot
 ```
-Make copy of config.py and change tokens and ids then run
+Make copy of config.py and change tokens and ids (for tokens use botfather, for ids use web.telegra.org and check url for ID or use bots) then run
 
 ```
 bash run.sh

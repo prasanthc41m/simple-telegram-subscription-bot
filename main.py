@@ -87,10 +87,36 @@ class MembershipTrackerBot:
         except Exception as e:
             logger.error("Error saving data: %s", e)
 
+    async def send_data_backup(self, context: ContextTypes.DEFAULT_TYPE, change_description: str = "Data updated"):
+        """Send the data file as backup to debug channel"""
+        try:
+            with open(self.data_file, 'rb') as file:
+                await context.bot.send_document(
+                    chat_id=self.debug_chat_id,
+                    document=file,
+                    filename=f"member_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    caption=f"📊 {change_description} - Member data backup\n"
+                           f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                           f"💾 Total chats: {len(self.join_data)}"
+                )
+            logger.info("Data backup sent to debug channel: %s", change_description)
+        except Exception as e:
+            logger.error("Failed to send data backup: %s", e)
+            # Try to send error message as fallback
+            try:
+                await context.bot.send_message(
+                    chat_id=self.debug_chat_id,
+                    text=f"❌ Failed to send data backup: {e}"
+                )
+            except Exception:
+                pass
+
     async def track_new_member(self, update: Update,
                                context: ContextTypes.DEFAULT_TYPE):
         """Record join date of new members - FIXED VERSION"""
         try:
+            change_description = ""
+
             # Check if this is a chat_member update (user joined/left)
             if update.chat_member:
                 user = update.chat_member.new_chat_member.user
@@ -108,9 +134,10 @@ class MembershipTrackerBot:
 
                     logger.info("Tracked new member: %s in chat %s", user.id,
                                 chat_id)
+                    change_description = f"New member: {user.full_name} (@{user.username}) in chat {chat_id}"
                     await self.send_debug_message(
                         context,
-                        f"✅ New member tracked: {user.full_name} (@{user.username}) in chat {chat_id}"
+                        f"✅ {change_description}"
                     )
 
             # Check if this is a message with new chat members
@@ -119,6 +146,7 @@ class MembershipTrackerBot:
                 if chat_id not in self.join_data:
                     self.join_data[chat_id] = {}
 
+                member_names = []
                 for new_member in update.message.new_chat_members:
                     # Skip if the new member is a bot
                     if new_member.is_bot:
@@ -127,15 +155,23 @@ class MembershipTrackerBot:
                     # Store join date in ISO format
                     join_date = datetime.now().isoformat()
                     self.join_data[chat_id][str(new_member.id)] = join_date
+                    member_names.append(f"{new_member.full_name} (@{new_member.username})")
 
                     logger.info("Tracked new member: %s in chat %s",
                                 new_member.id, chat_id)
-                    await self.send_debug_message(
-                        context,
-                        f"✅ New member tracked: {new_member.full_name} (@{new_member.username}) in chat {chat_id}"
-                    )
 
                 self.save_data()
+
+                if member_names:
+                    change_description = f"New members: {', '.join(member_names)} in chat {chat_id}"
+                    await self.send_debug_message(
+                        context,
+                        f"✅ {change_description}"
+                    )
+
+            # Send backup if there was a change
+            if change_description:
+                await self.send_data_backup(context, change_description)
 
         except Exception as e:
             logger.error("Error tracking new member: %s", e)
@@ -156,6 +192,7 @@ class MembershipTrackerBot:
 
             removal_count = 0
             error_count = 0
+            removed_members = []
 
             for chat_id, members in list(self.join_data.items()):
                 logger.info("Checking chat %s with %s members", chat_id,
@@ -183,6 +220,7 @@ class MembershipTrackerBot:
                             # Remove from tracking
                             del self.join_data[chat_id][user_id]
                             removal_count += 1
+                            removed_members.append(f"User {user_id} from chat {chat_id}")
 
                             logger.info(
                                 "Removed expired member: %s from chat %s",
@@ -208,6 +246,11 @@ class MembershipTrackerBot:
             logger.info("Removal job completed: %s members removed, %s errors",
                         removal_count, error_count)
             await self.send_debug_message(context, summary)
+
+            # Send backup after removal job
+            if removal_count > 0:
+                change_description = f"Removed {removal_count} expired members"
+                await self.send_data_backup(context, change_description)
 
         except Exception as e:
             logger.error("Error in removal job: %s", e)
@@ -349,11 +392,25 @@ class MembershipTrackerBot:
             await self.send_debug_message(
                 context, f"Initialized {count} members in chat {chat_id}")
 
+            # Send backup after initialization
+            await self.send_data_backup(context, f"Initialized {count} members in chat {chat_id}")
+
         except Exception as e:
             logger.error("Error initializing members: %s", e)
             await update.message.reply_text(f"❌ Error: {e}")
             await self.send_debug_message(context,
                                           f"Error initializing members: {e}")
+
+    async def backup_command(self, update: Update,
+                            context: ContextTypes.DEFAULT_TYPE):
+        """Manual command to trigger data backup"""
+        if not self.is_admin(str(update.effective_user.id)):
+            await update.message.reply_text("❌ Only admin can use this command")
+            return
+
+        await update.message.reply_text("🔄 Creating manual data backup...")
+        await self.send_data_backup(context, "Manual backup triggered by admin")
+        await update.message.reply_text("✅ Backup sent to debug channel!")
 
 
 def main():
@@ -367,6 +424,7 @@ def main():
     application.add_handler(CommandHandler("start", bot.start_command))
     application.add_handler(CommandHandler("status", bot.status_command))
     application.add_handler(CommandHandler("debug", bot.debug_command))
+    application.add_handler(CommandHandler("backup", bot.backup_command))
     application.add_handler(
         CommandHandler("remove_now", bot.manual_remove_command))
     application.add_handler(CommandHandler("init_members", bot.init_members))
